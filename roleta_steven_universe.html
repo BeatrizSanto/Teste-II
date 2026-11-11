@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roleta Interativa - Steven Universe</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts: Fredoka One / Quicksand -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background: radial-gradient(circle at center, #2e1065, #0f172a);
+            min-height: 100vh;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        .font-steven {
+            font-family: 'Fredoka One', cursive;
+            letter-spacing: 1px;
+        }
+
+        /* Efeito de iluminação nos botões */
+        .btn-spin {
+            background: linear-gradient(135deg, #ec4899, #8b5cf6);
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .btn-spin:hover:not(:disabled) {
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 0 30px rgba(236, 72, 153, 0.9), inset 0 2px 6px rgba(255, 255, 255, 0.6);
+        }
+
+        .btn-spin:active:not(:disabled) {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        .btn-spin:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Moldura brilhante ao redor da roleta */
+        .wheel-container {
+            position: relative;
+            filter: drop-shadow(0 0 25px rgba(168, 85, 247, 0.4));
+        }
+
+        /* Indicador / Ponteiro Estilizado */
+        .pointer {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 46px;
+            z-index: 20;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        }
+
+        /* Animação do Modal */
+        @keyframes modalPop {
+            0% { transform: scale(0.7) translateY(20px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .animate-modal {
+            animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-between p-4 min-h-screen">
+
+    <!-- Estrelas sutis no fundo -->
+    <div class="fixed inset-0 pointer-events-none opacity-20">
+        <div class="absolute top-10 left-10 text-yellow-300 text-2xl">★</div>
+        <div class="absolute top-1/4 right-16 text-pink-400 text-xl">✦</div>
+        <div class="absolute bottom-20 left-1/5 text-purple-300 text-3xl">★</div>
+        <div class="absolute bottom-12 right-1/4 text-yellow-200 text-lg">✦</div>
+    </div>
+
+    <!-- Cabeçalho -->
+    <header class="text-center mt-2 mb-4 z-10">
+        <h1 class="text-4xl sm:text-5xl font-steven text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-300 to-yellow-300 drop-shadow-md">
+            STEVEN UNIVERSE
+        </h1>
+        <p class="text-pink-200 text-sm sm:text-base font-semibold mt-1 opacity-90">
+            Roleta da Sorte Crystal Gems
+        </p>
+    </header>
+
+    <!-- Conteúdo Principal / Roleta -->
+    <main class="flex flex-col items-center justify-center w-full max-w-lg z-10">
+        
+        <div class="wheel-container flex items-center justify-center w-full aspect-square max-w-[420px] p-2">
+            
+            <!-- Ponteiro / Seta Superior -->
+            <div class="pointer">
+                <svg viewBox="0 0 36 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M18 46L3.27799 15.25C0.370487 9.18663 4.79155 2 11.5303 2L24.4697 2C31.2084 2 35.6295 9.18663 32.722 15.25L18 46Z" fill="#FACC15" stroke="#FFFFFF" stroke-width="3"/>
+                    <circle cx="18" cy="12" r="5" fill="#EF4444"/>
+                </svg>
+            </div>
+
+            <!-- Canvas da Roleta -->
+            <canvas id="wheelCanvas" width="800" height="800" class="w-full h-full rounded-full cursor-pointer touch-none"></canvas>
+        </div>
+
+        <!-- Botão de Girar -->
+        <button id="spinBtn" class="btn-spin mt-6 px-10 py-3.5 rounded-full text-xl sm:text-2xl font-steven text-white uppercase tracking-wider">
+            GIRAR ROLETA!
+        </button>
+
+    </main>
+
+    <!-- Rodapé Informativo -->
+    <footer class="mt-6 text-center text-xs text-purple-300 opacity-70 z-10">
+        Desenvolvido com Canvas & JS Vanilla • Tema Steven Universe
+    </footer>
+
+    <!-- Modal de Resultado -->
+    <div id="resultModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-gradient-to-b from-purple-900 via-slate-900 to-indigo-950 border-2 border-pink-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl animate-modal relative overflow-hidden">
+            
+            <!-- Brilho de fundo no modal -->
+            <div id="modalGlow" class="absolute -top-12 -left-12 w-40 h-40 rounded-full blur-3xl opacity-40"></div>
+
+            <h3 class="text-sm font-bold uppercase tracking-widest text-pink-300 mb-1">Sorteado!</h3>
+            <h2 id="modalTitle" class="text-3xl font-steven text-yellow-300 mb-4">Nome do Personagem</h2>
+
+            <!-- Imagem do Resultado -->
+            <div class="relative w-36 h-36 mx-auto mb-4 rounded-full p-1 bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 shadow-lg flex items-center justify-center overflow-hidden">
+                <img id="modalImage" src="" alt="" class="w-full h-full object-cover rounded-full bg-slate-800">
+                <div id="modalFallbackIcon" class="hidden w-full h-full rounded-full flex items-center justify-center text-5xl font-steven text-white shadow-inner"></div>
+            </div>
+
+            <p id="modalDescription" class="text-sm text-gray-200 mb-6 px-2">
+                Descrição do personagem...
+            </p>
+
+            <button id="closeModalBtn" class="w-full py-3 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-steven rounded-xl shadow-lg transition transform active:scale-95">
+                CONTINUAR
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript da Roleta -->
+    <script>
+        // SVGs Vetoriais Embutidos (Data URIs) para garantir exibição 100% perfeita sem depender de arquivos externos
+        const svgRuby = "data:image/svg+xml;utf8," + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="48" fill="#e11d48"/>
+                <!-- Rubi da Steven Universe -->
+                <rect x="20" y="15" width="60" height="42" rx="15" fill="#581c87"/>
+                <circle cx="50" cy="65" r="28" fill="#f43f5e"/>
+                <!-- Faixa com flores azuis -->
+                <rect x="18" y="38" width="64" height="6" rx="3" fill="#ffffff"/>
+                <circle cx="35" cy="41" r="5" fill="#3b82f6"/>
+                <circle cx="50" cy="41" r="5" fill="#3b82f6"/>
+                <circle cx="65" cy="41" r="5" fill="#3b82f6"/>
+                <!-- Rosto -->
+                <ellipse cx="40" cy="58" rx="5" ry="6" fill="#000"/>
+                <ellipse cx="60" cy="58" rx="5" ry="6" fill="#000"/>
+                <circle cx="41" cy="56" r="2" fill="#fff"/>
+                <circle cx="61" cy="56" r="2" fill="#fff"/>
+                <path d="M 42 68 Q 50 74 58 68" stroke="#9f1239" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <ellipse cx="36" cy="64" rx="4" ry="2.5" fill="#fb7185"/>
+                <ellipse cx="64" cy="64" rx="4" ry="2.5" fill="#fb7185"/>
+            </svg>
+        `);
+
+        const svgBlueDiamond = "data:image/svg+xml;utf8," + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="48" fill="#1e3a8a"/>
+                <!-- Cabelo Branco / Diamante Azul -->
+                <path d="M 20 85 C 15 30 30 15 50 15 C 70 15 85 30 80 85 Z" fill="#e0f2fe"/>
+                <path d="M 32 40 C 35 25 65 25 68 40 C 60 65 40 65 32 40 Z" fill="#93c5fd"/>
+                <!-- Rosto Satisfeito -->
+                <path d="M 38 42 Q 43 38 48 42" stroke="#1e40af" stroke-width="2.5" fill="none"/>
+                <path d="M 52 42 Q 57 38 62 42" stroke="#1e40af" stroke-width="2.5" fill="none"/>
+                <path d="M 43 52 Q 50 57 57 52" stroke="#1e40af" stroke-width="2.5" fill="none"/>
+                <!-- Gem Diamante -->
+                <polygon points="50,66 57,75 50,84 43,75" fill="#3b82f6" stroke="#1d4ed8" stroke-width="1.5"/>
+            </svg>
+        `);
+
+        const svgAmethyst = "data:image/svg+xml;utf8," + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="48" fill="#581c87"/>
+                <!-- Cabelo roxo claro Ametista -->
+                <path d="M 15 90 C 10 25 35 10 50 10 C 75 10 90 30 85 90 Z" fill="#e9d5ff"/>
+                <!-- Pele lilás -->
+                <ellipse cx="50" cy="45" rx="22" ry="24" fill="#c084fc"/>
+                <!-- Olho alegre e boca -->
+                <ellipse cx="55" cy="42" rx="4" ry="5" fill="#000"/>
+                <circle cx="56" cy="40" r="1.5" fill="#fff"/>
+                <path d="M 45 54 Q 52 60 60 54" stroke="#581c87" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <!-- Regata preta + Gema Peito -->
+                <path d="M 30 70 L 70 70 L 65 95 L 35 95 Z" fill="#18181b"/>
+                <polygon points="50,73 57,80 50,87 43,80" fill="#a855f7" stroke="#f0abfc" stroke-width="1.5"/>
+            </svg>
+        `);
+
+        const svgSteven = "data:image/svg+xml;utf8," + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="48" fill="#0284c7"/>
+                <!-- Cabelo cacheado do Steven -->
+                <circle cx="35" cy="30" r="14" fill="#451a03"/>
+                <circle cx="50" cy="24" r="15" fill="#451a03"/>
+                <circle cx="65" cy="30" r="14" fill="#451a03"/>
+                <!-- Rosto sorridente -->
+                <circle cx="50" cy="46" r="22" fill="#fed7aa"/>
+                <!-- Olhos grandões -->
+                <ellipse cx="42" cy="44" rx="4.5" ry="6" fill="#000"/>
+                <ellipse cx="58" cy="44" rx="4.5" ry="6" fill="#000"/>
+                <circle cx="43" cy="42" r="1.8" fill="#fff"/>
+                <circle cx="59" cy="42" r="1.8" fill="#fff"/>
+                <!-- Boca aberta sorrindo -->
+                <path d="M 38 52 Q 50 66 62 52 Z" fill="#991b1b"/>
+                <path d="M 42 53 Q 50 57 58 53" fill="#ffffff"/>
+                <!-- Camisa Vermelha com Estrela -->
+                <path d="M 24 75 Q 50 68 76 75 L 80 100 L 20 100 Z" fill="#ef4444"/>
+                <polygon points="50,73 53,80 60,80 54,84 57,91 50,86 43,91 46,84 40,80 47,80" fill="#facc15"/>
+            </svg>
+        `);
+
+        const svgCrystalGems = "data:image/svg+xml;utf8," + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="48" fill="#be185d"/>
+                <!-- Estrela de Fundo Amarela das Crystal Gems -->
+                <polygon points="50,10 62,35 90,38 68,57 75,85 50,70 25,85 32,57 10,38 38,35" fill="#facc15" stroke="#f43f5e" stroke-width="3"/>
+                <!-- Silhuetas / Personagens Juntos -->
+                <circle cx="50" cy="45" r="13" fill="#fed7aa"/> <!-- Steven -->
+                <path d="M 43 47 Q 50 57 57 47 Z" fill="#991b1b"/>
+                <circle cx="32" cy="36" r="10" fill="#9d174d"/> <!-- Garnet -->
+                <polygon points="26,32 38,32 32,38" fill="#facc15"/>
+                <circle cx="68" cy="36" r="9" fill="#fef08a"/> <!-- Pérola -->
+            </svg>
+        `);
+
+        // Elementos do DOM
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spinBtn');
+        const resultModal = document.getElementById('resultModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalImage = document.getElementById('modalImage');
+        const modalFallbackIcon = document.getElementById('modalFallbackIcon');
+        const modalDescription = document.getElementById('modalDescription');
+        const modalGlow = document.getElementById('modalGlow');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+
+        // Configuração dos itens da roleta com SVGs 100% integrados
+        const items = [
+            { name: "Botton", color: "#E11D48", imgSrc: svgRuby, type: "botton", description: "Parabéns! Você ganhou um Botton exclusivo da Rubi!", symbol: "⭐" },
+            { name: "Cartela de Figurinha", color: "#2563EB", imgSrc: svgBlueDiamond, type: "figurinha", description: "Incrível! Você ganhou uma Cartela de Figurinhas da Diamante Azul!", symbol: "💎" },
+            { name: "Pergunta Misteriosa", color: "#9333EA", imgSrc: svgAmethyst, type: "pergunta", description: "Desafio aceito! Responda à pergunta da Ametista:", symbol: "❓" },
+            { name: "Botton", color: "#F59E0B", imgSrc: svgSteven, type: "botton", description: "Que legal! Você ganhou um Botton vibrante do Steven!", symbol: "🌟" },
+            { name: "Cartela de Figurinha", color: "#EC4899", imgSrc: svgCrystalGems, type: "figurinha", description: "Show! Você ganhou uma Cartela de Figurinhas das Crystal Gems!", symbol: "✨" }
+        ];
+
+        const mysteriousQuestions = [
+            "Qual é o nome da fusão entre o Steven e a Connie?",
+            "Qual instrumento o Steven costuma tocar nas músicas?",
+            "Quem é a líder original das Crystal Gems?",
+            "Qual é a arma principal da Garnet?",
+            "Onde fica localizado o templo das Crystal Gems?",
+            "Como é o nome do leão rosa do Steven?"
+        ];
+
+        const numSlices = items.length;
+        const sliceAngle = (2 * Math.PI) / numSlices;
+        let currentAngle = 0;
+        let isSpinning = false;
+
+        // Pré-carregamento imediato das imagens vetorizadas
+        const loadedImages = [];
+        let imagesLoadedCount = 0;
+
+        items.forEach((item, index) => {
+            const img = new Image();
+            img.src = item.imgSrc;
+            img.onload = () => {
+                imagesLoadedCount++;
+                drawWheel();
+            };
+            loadedImages[index] = img;
+        });
+
+        // Funções Auxiliares
+        function adjustColorBrightness(hex, percent) {
+            let num = parseInt(hex.replace('#', ''), 16),
+                amt = Math.round(2.55 * percent),
+                R = (num >> 16) + amt,
+                G = (num >> 8 & 0x00FF) + amt,
+                B = (num & 0x0000FF) + amt;
+            return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+        }
+
+        function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius, color) {
+            let rot = Math.PI / 2 * 3;
+            let x = cx;
+            let y = cy;
+            let step = Math.PI / spikes;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                x = cx + Math.cos(rot) * outerRadius;
+                y = cy + Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+
+                x = cx + Math.cos(rot) * innerRadius;
+                y = cy + Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+            }
+            ctx.lineTo(cx, cy - outerRadius);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        /**
+         * Renderiza cada fatia da roleta com a imagem perfeitamente ajustada
+         */
+        function drawSlice(centerX, centerY, radius, angleStart, angleEnd, item, index) {
+            const midAngle = angleStart + sliceAngle / 2;
+            const gradX = centerX + Math.cos(midAngle) * radius;
+            const gradY = centerY + Math.sin(midAngle) * radius;
+            const gradient = ctx.createLinearGradient(centerX, centerY, gradX, gradY);
+            gradient.addColorStop(0, adjustColorBrightness(item.color, -15));
+            gradient.addColorStop(1, item.color);
+
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, angleStart, angleEnd);
+            ctx.closePath();
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // Divisores de fatia
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(midAngle);
+
+            // FOTO DO PERSONAGEM (Centralizada na fatia)
+            const img = loadedImages[index];
+            const imgSize = 105;
+            const imgDist = radius * 0.44;
+
+            ctx.save();
+            ctx.translate(imgDist, 0);
+            ctx.rotate(Math.PI / 2); // Mantém a foto em pé
+
+            // Moldura Circular de Destaque
+            ctx.beginPath();
+            ctx.arc(0, 0, imgSize / 2 + 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#FACC15';
+            ctx.stroke();
+
+            if (img && img.complete) {
+                ctx.beginPath();
+                ctx.arc(0, 0, imgSize / 2, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(img, -imgSize / 2, -imgSize / 2, imgSize, imgSize);
+            }
+            ctx.restore();
+
+            // TEXTO DO PRÊMIO CENTRALIZADO E BEM PEQUENO NA BORDA EXTERNA
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 11px "Fredoka One", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+            ctx.shadowBlur = 4;
+            
+            const words = item.name.toUpperCase().split(' ');
+            const textDist = radius * 0.83;
+            
+            if (words.length > 2) {
+                const line1 = words.slice(0, 2).join(' ');
+                const line2 = words.slice(2).join(' ');
+                ctx.fillText(line1, textDist, -6);
+                ctx.fillText(line2, textDist, 6);
+            } else if (words.length === 2 && words[0].length > 5) {
+                ctx.fillText(words[0], textDist, -6);
+                ctx.fillText(words[1], textDist, 6);
+            } else {
+                ctx.fillText(item.name.toUpperCase(), textDist, 0);
+            }
+
+            ctx.restore();
+        }
+
+        /**
+         * Redesenha a roleta no Canvas
+         */
+        function drawWheel() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = width / 2 - 20;
+
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 15;
+
+            for (let i = 0; i < numSlices; i++) {
+                const angleStart = currentAngle + i * sliceAngle;
+                const angleEnd = angleStart + sliceAngle;
+                drawSlice(centerX, centerY, radius, angleStart, angleEnd, items[i], i);
+            }
+
+            ctx.restore();
+
+            // Borda Externa Amarela Estilizada
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.lineWidth = 12;
+            ctx.strokeStyle = '#FACC15';
+            ctx.stroke();
+
+            // Centro da Roleta com Estrela Rosa/Amarela
+            const innerRadius = 45;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fill();
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#EC4899';
+            ctx.stroke();
+
+            drawStar(ctx, centerX, centerY, 5, 22, 11, '#FACC15');
+        }
+
+        /**
+         * Rotação suave da roleta
+         */
+        function spinWheel() {
+            if (isSpinning) return;
+            isSpinning = true;
+            spinBtn.disabled = true;
+
+            const extraRounds = 5 + Math.floor(Math.random() * 5);
+            const randomTargetSlice = Math.floor(Math.random() * numSlices);
+            
+            const targetSliceAngle = (2 * Math.PI) - (randomTargetSlice * sliceAngle + sliceAngle / 2);
+            const totalRotation = (extraRounds * 2 * Math.PI) + targetSliceAngle;
+            
+            const startAngle = currentAngle % (2 * Math.PI);
+            const finalAngle = startAngle + totalRotation;
+            
+            const duration = 4500;
+            let startTime = null;
+
+            function animateSpin(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const elapsed = timestamp - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                currentAngle = startAngle + (finalAngle - startAngle) * easeProgress;
+
+                drawWheel();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateSpin);
+                } else {
+                    isSpinning = false;
+                    spinBtn.disabled = false;
+                    showResult(randomTargetSlice);
+                }
+            }
+
+            requestAnimationFrame(animateSpin);
+        }
+
+        /**
+         * Exibe o resultado sorteado
+         */
+        function showResult(index) {
+            const winner = items[index];
+            
+            modalTitle.innerText = winner.name;
+            modalGlow.style.backgroundColor = winner.color;
+
+            // Exibe a imagem no modal sem riscos de falha de carregamento
+            modalImage.classList.remove('hidden');
+            modalFallbackIcon.classList.add('hidden');
+            modalImage.src = winner.imgSrc;
+
+            if (winner.type === 'pergunta') {
+                const randomQuestion = mysteriousQuestions[Math.floor(Math.random() * mysteriousQuestions.length)];
+                modalDescription.innerHTML = `${winner.description}<br><strong class="text-yellow-300 text-base mt-2 block font-steven">"${randomQuestion}"</strong>`;
+            } else {
+                modalDescription.innerText = winner.description;
+            }
+
+            resultModal.classList.remove('hidden');
+
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 110,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#ec4899', '#8b5cf6', '#facc15', '#ef4444', '#3b82f6', '#10b981']
+                });
+            }
+        }
+
+        spinBtn.addEventListener('click', spinWheel);
+        canvas.addEventListener('click', spinWheel);
+
+        closeModalBtn.addEventListener('click', () => {
+            resultModal.classList.add('hidden');
+        });
+
+        window.addEventListener('resize', drawWheel);
+        drawWheel();
+    </script>
+</body>
+</html>
